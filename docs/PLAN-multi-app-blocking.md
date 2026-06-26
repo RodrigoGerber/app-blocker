@@ -142,6 +142,51 @@ data class RuleRow(
 - Icon loading in a long picker list — load lazily, off the main thread.
 - Per-manufacturer service-killing still applies (spec §22), unchanged.
 
+## Resolved design decisions
+
+Confirmed with the user (✓) or decided with a stated recommendation (→).
+
+1. ✓ **Persistence** — JSON-serialized `List<BlockingRule>` in the existing
+   Preferences DataStore (kotlinx.serialization). Room deferred to a later
+   history phase.
+2. ✓ **Master "pause all" switch** — keep a global pause *and* per-rule toggles.
+   Stored as one extra boolean; when paused the service's monitored set is
+   empty (nothing is blocked, no per-rule state is lost).
+3. ✓ **Add-an-app flow** — picking an app opens the rule editor pre-filled with
+   the default limit and **enabled**; nothing is persisted until **Save**
+   (Cancel discards → no orphan rules).
+4. ✓ **Blockable apps** — exclude only our own app and the current default
+   **home/launcher**. No critical-app guardrail: blocking a wrong app is
+   trivially reversible (just delete the rule), so it isn't worth the
+   `RoleManager` overhead. Everything else launchable is selectable.
+5. → **Uninstalled-app rules** — keep showing the rule with a placeholder
+   icon/label + a Delete action; don't silently prune (a temporary uninstall
+   shouldn't lose config).
+6. → **Migrate current Instagram rule** — on first launch, carry the existing
+   single-rule limit/enabled into the new list, then clear the old keys.
+7. → **Editor surface & list order** — rule editor as a bottom sheet; rules list
+   sorted A–Z by app label.
+8. → **Blocking action unchanged** — still `GLOBAL_ACTION_HOME` for every
+   blocked app (overlay is a future phase, spec §21.2).
+
+### Picker exclusions (decision 4)
+
+The picker hides only our own package and the current **home/launcher**
+(resolved via `ACTION_MAIN` / `CATEGORY_HOME`). Everything else launchable is
+selectable; a wrong choice is undone by deleting the rule.
+
+### Global-pause impact on the data layer
+
+`RuleRepository` gains a small pause flag alongside the list:
+
+```kotlin
+val paused: Flow<Boolean>
+suspend fun setPaused(paused: Boolean)
+```
+
+The accessibility service's monitored-set collector yields an **empty set**
+while `paused == true`, so the hot path stays a single set lookup.
+
 ## Suggested implementation order
 
 1. Data layer: list-based `RuleRepository` + serialization + migration + tests.
