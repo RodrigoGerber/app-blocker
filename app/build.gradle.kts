@@ -42,6 +42,8 @@ android {
 
     buildFeatures {
         compose = true
+        // Generates BuildConfig.DEBUG, used to gate chatty per-event logs.
+        buildConfig = true
     }
 
     testOptions {

@@ -5,6 +5,7 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.example.appblocker.AppBlockerApplication
+import com.example.appblocker.BuildConfig
 import com.example.appblocker.blocking.AccessibilityHomeRedirector
 import com.example.appblocker.config.AppBlockerConfig
 import kotlinx.coroutines.CoroutineScope
@@ -69,7 +70,9 @@ class AppBlockerAccessibilityService : AccessibilityService() {
         }
         lastEvaluationAt = now
 
-        Log.d(TAG, "Detected foreground: $packageName")
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "Detected foreground: $packageName")
+        }
 
         serviceScope.launch {
             // Skip if another evaluation is already running rather than queueing.

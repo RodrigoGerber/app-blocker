@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -105,28 +104,29 @@ fun AppBlockerScreen(
             )
         }
 
-        Spacer(Modifier.height(24.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(16.dp))
-
-        Text(text = "Permissions", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
-
-        PermissionCard(
-            label = "Usage access",
-            granted = state.hasUsageAccess,
-            missingMessage = "Usage access required",
-            actionLabel = "Grant access",
-            onActionClick = onGrantUsageAccess,
-        )
-        Spacer(Modifier.height(8.dp))
-        PermissionCard(
-            label = "Accessibility service",
-            granted = state.hasAccessibilityAccess,
-            missingMessage = "Accessibility service disabled",
-            actionLabel = "Enable service",
-            onActionClick = onEnableAccessibility,
-        )
+        // No persistent permission status on the main page. Prompts surface
+        // only when a required permission is missing, so blocking can still be
+        // made to work; once granted, they disappear.
+        if (!state.hasUsageAccess) {
+            Spacer(Modifier.height(16.dp))
+            PermissionCard(
+                label = "Usage access",
+                granted = false,
+                missingMessage = "Usage access required",
+                actionLabel = "Grant access",
+                onActionClick = onGrantUsageAccess,
+            )
+        }
+        if (!state.hasAccessibilityAccess) {
+            Spacer(Modifier.height(16.dp))
+            PermissionCard(
+                label = "Accessibility service",
+                granted = false,
+                missingMessage = "Accessibility service disabled",
+                actionLabel = "Enable service",
+                onActionClick = onEnableAccessibility,
+            )
+        }
     }
 }
 

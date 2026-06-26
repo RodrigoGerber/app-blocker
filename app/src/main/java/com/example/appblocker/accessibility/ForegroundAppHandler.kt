@@ -1,6 +1,7 @@
 package com.example.appblocker.accessibility
 
 import android.util.Log
+import com.example.appblocker.BuildConfig
 import com.example.appblocker.blocking.BlockingDecision
 import com.example.appblocker.blocking.BlockingPolicy
 import com.example.appblocker.blocking.HomeRedirector
@@ -36,7 +37,8 @@ class ForegroundAppHandler(
 
         when (val decision = blockingPolicy.evaluate(packageName)) {
             BlockingDecision.Allow -> {
-                Log.d(TAG, "Allow $packageName")
+                // Routine, high-frequency — debug builds only.
+                if (BuildConfig.DEBUG) Log.d(TAG, "Allow $packageName")
             }
 
             is BlockingDecision.Block -> {
