@@ -10,11 +10,16 @@
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
-    <!-- Lets the app query the list of installed launchable apps (future use). -->
+    <!-- Lets the app query installed launchable apps (the picker) and resolve
+         the current home launcher (to exclude it). Required on Android 11+. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
         </intent>
     </queries>
 
