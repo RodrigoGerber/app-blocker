@@ -71,8 +71,23 @@ fun AppPickerScreen(
                         )
                     }
 
-                    items(state.apps, key = { it.packageName }) { app ->
-                        AppPickerRow(app = app, onClick = { onSelect(app) })
+                    if (state.apps.isEmpty()) {
+                        item {
+                            Text(
+                                text = if (state.query.isBlank()) {
+                                    "No apps available to add."
+                                } else {
+                                    "No apps match \"${state.query}\"."
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(16.dp),
+                            )
+                        }
+                    } else {
+                        items(state.apps, key = { it.packageName }) { app ->
+                            AppPickerRow(app = app, onClick = { onSelect(app) })
+                        }
                     }
                 }
             }
