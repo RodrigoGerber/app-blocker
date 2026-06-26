@@ -3,16 +3,34 @@ package com.example.appblocker.rules
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Reads and writes the single blocking rule. [rule] is a reactive stream for the
- * UI; [getRule] is a one-shot read for the accessibility path, which only needs
- * the current value when an app is opened.
+ * Reads and writes the set of blocking rules (one per app) plus a global pause
+ * flag. The reactive [rules]/[paused] streams drive the UI; the one-shot reads
+ * serve the accessibility path, which only needs current values when an app is
+ * opened.
  */
 interface RuleRepository {
-    val rule: Flow<BlockingRule>
 
-    suspend fun getRule(): BlockingRule
+    /** All rules, in no particular order. */
+    val rules: Flow<List<BlockingRule>>
 
-    suspend fun setDailyLimitMinutes(minutes: Int)
+    /** Global "pause all" — when true, nothing is blocked regardless of rules. */
+    val paused: Flow<Boolean>
 
-    suspend fun setEnabled(enabled: Boolean)
+    suspend fun getRules(): List<BlockingRule>
+
+    /** The rule for [packageName], or null if the app is not monitored. */
+    suspend fun getRule(packageName: String): BlockingRule?
+
+    suspend fun isPaused(): Boolean
+
+    /** Insert or replace the rule for [rule.packageName]. */
+    suspend fun upsertRule(rule: BlockingRule)
+
+    suspend fun deleteRule(packageName: String)
+
+    suspend fun setEnabled(packageName: String, enabled: Boolean)
+
+    suspend fun setDailyLimitMinutes(packageName: String, minutes: Int)
+
+    suspend fun setPaused(paused: Boolean)
 }

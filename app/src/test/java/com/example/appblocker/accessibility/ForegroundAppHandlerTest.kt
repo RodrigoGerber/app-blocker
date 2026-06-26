@@ -3,11 +3,9 @@ package com.example.appblocker.accessibility
 import com.example.appblocker.blocking.BlockingPolicy
 import com.example.appblocker.blocking.HomeRedirector
 import com.example.appblocker.rules.BlockingRule
-import com.example.appblocker.rules.RuleRepository
+import com.example.appblocker.rules.FakeRuleRepository
 import com.example.appblocker.usage.DailyUsage
 import com.example.appblocker.usage.DailyUsageProvider
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -24,13 +22,6 @@ class ForegroundAppHandlerTest {
         }
     }
 
-    private class FakeRuleRepository(private val current: BlockingRule) : RuleRepository {
-        override val rule: Flow<BlockingRule> = flowOf(current)
-        override suspend fun getRule(): BlockingRule = current
-        override suspend fun setDailyLimitMinutes(minutes: Int) = Unit
-        override suspend fun setEnabled(enabled: Boolean) = Unit
-    }
-
     private class FakeUsageProvider(private val usedMillis: Long) : DailyUsageProvider {
         override suspend fun getUsageToday(packageName: String) =
             DailyUsage(packageName, usedMillis)
@@ -39,7 +30,13 @@ class ForegroundAppHandlerTest {
     private fun policy(enabled: Boolean, limitMinutes: Int, usedMillis: Long) =
         BlockingPolicy(
             ruleRepository = FakeRuleRepository(
-                BlockingRule(packageName = pkg, dailyLimitMinutes = limitMinutes, enabled = enabled),
+                listOf(
+                    BlockingRule(
+                        packageName = pkg,
+                        dailyLimitMinutes = limitMinutes,
+                        enabled = enabled,
+                    ),
+                ),
             ),
             dailyUsageProvider = FakeUsageProvider(usedMillis),
         )

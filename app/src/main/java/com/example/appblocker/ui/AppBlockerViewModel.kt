@@ -7,6 +7,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.appblocker.AppBlockerApplication
 import com.example.appblocker.accessibility.AccessibilityPermissionChecker
+import com.example.appblocker.config.AppBlockerConfig
+import com.example.appblocker.rules.BlockingRule
 import com.example.appblocker.rules.RuleRepository
 import com.example.appblocker.system.SettingsNavigator
 import com.example.appblocker.usage.DailyUsageProvider
@@ -24,6 +26,10 @@ import kotlinx.coroutines.launch
  * State is refreshed on demand ([refresh]) rather than ticking every second:
  * the Activity calls it on resume, after returning from Settings, and on a
  * light periodic timer while visible.
+ *
+ * NOTE: this is a temporary single-app bridge over the new list-based
+ * [RuleRepository], pinned to the Instagram rule. It is replaced by the
+ * multi-rule UI in step 4 of the multi-app plan.
  */
 class AppBlockerViewModel(
     private val ruleRepository: RuleRepository,
@@ -45,13 +51,16 @@ class AppBlockerViewModel(
         viewModelScope.launch {
             val hasUsageAccess = usageAccessChecker.hasUsageAccess()
             val hasAccessibility = accessibilityChecker.isServiceEnabled()
-            val rule = ruleRepository.getRule()
+            val rule = ruleRepository.getRule(BRIDGED_PACKAGE)
+
+            val limitMinutes = rule?.dailyLimitMinutes ?: AppBlockerConfig.DEFAULT_DAILY_LIMIT_MINUTES
+            val enabled = rule?.enabled ?: false
 
             // Usage can only be read with the access grant; otherwise show 0 and
             // never pretend we are measuring correctly (spec §15.1).
             val usedMinutes = if (hasUsageAccess) {
                 runCatching {
-                    dailyUsageProvider.getUsageToday(rule.packageName).usedMinutes
+                    dailyUsageProvider.getUsageToday(BRIDGED_PACKAGE).usedMinutes
                 }.getOrElse { 0L }
             } else {
                 0L
@@ -60,9 +69,9 @@ class AppBlockerViewModel(
             _uiState.update {
                 it.copy(
                     isLoading = false,
-                    dailyLimitMinutes = rule.dailyLimitMinutes,
+                    dailyLimitMinutes = limitMinutes,
                     usedMinutesToday = usedMinutes,
-                    blockingEnabled = rule.enabled,
+                    blockingEnabled = enabled,
                     hasUsageAccess = hasUsageAccess,
                     hasAccessibilityAccess = hasAccessibility,
                 )
@@ -72,7 +81,14 @@ class AppBlockerViewModel(
 
     fun setDailyLimitMinutes(minutes: Int) {
         viewModelScope.launch {
-            ruleRepository.setDailyLimitMinutes(minutes.coerceAtLeast(0))
+            val current = ruleRepository.getRule(BRIDGED_PACKAGE)
+            ruleRepository.upsertRule(
+                BlockingRule(
+                    packageName = BRIDGED_PACKAGE,
+                    dailyLimitMinutes = minutes.coerceAtLeast(0),
+                    enabled = current?.enabled ?: false,
+                ),
+            )
             refresh()
         }
     }
@@ -84,7 +100,15 @@ class AppBlockerViewModel(
                 refresh()
                 return@launch
             }
-            ruleRepository.setEnabled(enabled)
+            val current = ruleRepository.getRule(BRIDGED_PACKAGE)
+            ruleRepository.upsertRule(
+                BlockingRule(
+                    packageName = BRIDGED_PACKAGE,
+                    dailyLimitMinutes = current?.dailyLimitMinutes
+                        ?: _uiState.value.dailyLimitMinutes,
+                    enabled = enabled,
+                ),
+            )
             refresh()
         }
     }
@@ -94,6 +118,9 @@ class AppBlockerViewModel(
     fun openAccessibilitySettings() = settingsNavigator.openAccessibilitySettings()
 
     companion object {
+        // The single-app bridge operates on the Instagram rule until step 4.
+        private const val BRIDGED_PACKAGE = AppBlockerConfig.INSTAGRAM_PACKAGE
+
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]

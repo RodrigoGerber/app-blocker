@@ -11,15 +11,19 @@ import com.example.appblocker.usage.DailyUsageProvider
  *
  * Fail-open: if usage cannot be computed, the decision is [BlockingDecision.Allow]
  * so a query failure never produces a confusing, unexplained block (spec §15.3).
+ *
+ * The global pause is enforced upstream (the service stops monitoring while
+ * paused), so this only needs to consider the app's own rule.
  */
 class BlockingPolicy(
     private val ruleRepository: RuleRepository,
     private val dailyUsageProvider: DailyUsageProvider,
 ) {
     suspend fun evaluate(packageName: String): BlockingDecision {
-        val rule = ruleRepository.getRule()
+        val rule = ruleRepository.getRule(packageName)
 
-        if (!rule.enabled || rule.packageName != packageName) {
+        // No rule for this app, or the rule is disabled → allow.
+        if (rule == null || !rule.enabled) {
             return BlockingDecision.Allow
         }
 
