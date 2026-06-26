@@ -5,16 +5,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.example.appblocker.ui.AppBlockerScreen
+import com.example.appblocker.ui.AppBlockerApp
 import com.example.appblocker.ui.AppBlockerViewModel
 import com.example.appblocker.ui.theme.AppBlockerTheme
 import kotlinx.coroutines.delay
@@ -32,17 +26,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AppBlockerTheme {
-                val state by viewModel.uiState.collectAsStateWithLifecycle()
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    AppBlockerScreen(
-                        state = state,
-                        onLimitChange = viewModel::setDailyLimitMinutes,
-                        onBlockingToggle = viewModel::setBlockingEnabled,
-                        onGrantUsageAccess = viewModel::openUsageAccessSettings,
-                        onEnableAccessibility = viewModel::openAccessibilitySettings,
-                        modifier = Modifier.padding(innerPadding),
-                    )
-                }
+                AppBlockerApp(viewModel = viewModel)
             }
         }
 

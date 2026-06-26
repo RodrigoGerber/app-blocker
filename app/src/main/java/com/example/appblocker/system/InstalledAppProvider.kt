@@ -31,6 +31,26 @@ class InstalledAppProvider(
     fun isInstalled(packageName: String): Boolean = getAppLabel(packageName) != null
 
     /**
+     * Label + icon for a single installed package, or null if it isn't
+     * installed (so the UI can show a placeholder for a rule whose app was
+     * uninstalled). Runs off the main thread.
+     */
+    suspend fun getInstalledApp(packageName: String): InstalledApp? =
+        withContext(defaultDispatcher) {
+            val pm = context.packageManager
+            try {
+                val info = pm.getApplicationInfo(packageName, 0)
+                val label = pm.getApplicationLabel(info).toString()
+                val icon = runCatching {
+                    pm.getApplicationIcon(info).toBitmap(ICON_PX, ICON_PX).asImageBitmap()
+                }.getOrNull()
+                InstalledApp(packageName = packageName, label = label, icon = icon)
+            } catch (e: PackageManager.NameNotFoundException) {
+                null
+            }
+        }
+
+    /**
      * All launchable apps (one entry per package), sorted A–Z by label, with
      * icons rasterized. Excludes our own app and the current home launcher
      * (blocking either would be miserable). Runs off the main thread because

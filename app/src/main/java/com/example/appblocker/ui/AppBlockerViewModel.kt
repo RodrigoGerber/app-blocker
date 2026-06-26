@@ -10,26 +10,28 @@ import com.example.appblocker.accessibility.AccessibilityPermissionChecker
 import com.example.appblocker.config.AppBlockerConfig
 import com.example.appblocker.rules.BlockingRule
 import com.example.appblocker.rules.RuleRepository
+import com.example.appblocker.system.InstalledApp
+import com.example.appblocker.system.InstalledAppProvider
 import com.example.appblocker.system.SettingsNavigator
 import com.example.appblocker.usage.DailyUsageProvider
 import com.example.appblocker.usage.UsageAccessPermissionChecker
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Holds the screen state and mediates between the UI and the domain layer. The
- * UI never touches system APIs directly (spec §5.1, §10.3).
+ * Holds state for the rules list, the app picker, and the add/edit editor, and
+ * mediates between the UI and the domain layer (spec §5.1, §10.3). The UI never
+ * touches system APIs directly.
  *
- * State is refreshed on demand ([refresh]) rather than ticking every second:
- * the Activity calls it on resume, after returning from Settings, and on a
- * light periodic timer while visible.
- *
- * NOTE: this is a temporary single-app bridge over the new list-based
- * [RuleRepository], pinned to the Instagram rule. It is replaced by the
- * multi-rule UI in step 4 of the multi-app plan.
+ * State is refreshed on demand ([refresh]); the Activity calls it on resume,
+ * after returning from Settings, and on a light periodic timer while visible.
  */
 class AppBlockerViewModel(
     private val ruleRepository: RuleRepository,
@@ -37,41 +39,64 @@ class AppBlockerViewModel(
     private val usageAccessChecker: UsageAccessPermissionChecker,
     private val accessibilityChecker: AccessibilityPermissionChecker,
     private val settingsNavigator: SettingsNavigator,
+    private val installedAppProvider: InstalledAppProvider,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AppBlockerUiState())
     val uiState: StateFlow<AppBlockerUiState> = _uiState.asStateFlow()
 
+    private val _pickerState = MutableStateFlow(PickerState())
+    val pickerState: StateFlow<PickerState> = _pickerState.asStateFlow()
+
+    // Label+icon cache so icons don't re-rasterize (and flicker) on each refresh.
+    private val appInfoCache = ConcurrentHashMap<String, InstalledApp>()
+
+    private var allPickerApps: List<InstalledApp> = emptyList()
+
     init {
         refresh()
     }
 
-    /** Recompute permissions, rule and usage. Safe to call repeatedly. */
+    // --- Rules list -------------------------------------------------------
+
+    /** Recompute permissions, pause state, rules and per-rule usage. */
     fun refresh() {
         viewModelScope.launch {
             val hasUsageAccess = usageAccessChecker.hasUsageAccess()
             val hasAccessibility = accessibilityChecker.isServiceEnabled()
-            val rule = ruleRepository.getRule(BRIDGED_PACKAGE)
+            val paused = ruleRepository.isPaused()
+            val rules = ruleRepository.getRules()
 
-            val limitMinutes = rule?.dailyLimitMinutes ?: AppBlockerConfig.DEFAULT_DAILY_LIMIT_MINUTES
-            val enabled = rule?.enabled ?: false
-
-            // Usage can only be read with the access grant; otherwise show 0 and
-            // never pretend we are measuring correctly (spec §15.1).
-            val usedMinutes = if (hasUsageAccess) {
-                runCatching {
-                    dailyUsageProvider.getUsageToday(BRIDGED_PACKAGE).usedMinutes
-                }.getOrElse { 0L }
-            } else {
-                0L
-            }
+            val rows = coroutineScope {
+                rules.map { rule ->
+                    async {
+                        val info = appInfo(rule.packageName)
+                        // Usage only with the access grant; else show 0 and never
+                        // pretend we're measuring correctly (spec §15.1).
+                        val used = if (hasUsageAccess) {
+                            runCatching {
+                                dailyUsageProvider.getUsageToday(rule.packageName).usedMinutes
+                            }.getOrElse { 0L }
+                        } else {
+                            0L
+                        }
+                        RuleRow(
+                            packageName = rule.packageName,
+                            label = info?.label ?: rule.packageName,
+                            icon = info?.icon,
+                            limitMinutes = rule.dailyLimitMinutes,
+                            usedMinutesToday = used,
+                            enabled = rule.enabled,
+                        )
+                    }
+                }.awaitAll()
+            }.sortedBy { it.label.lowercase() }
 
             _uiState.update {
                 it.copy(
                     isLoading = false,
-                    dailyLimitMinutes = limitMinutes,
-                    usedMinutesToday = usedMinutes,
-                    blockingEnabled = enabled,
+                    paused = paused,
+                    rules = rows,
                     hasUsageAccess = hasUsageAccess,
                     hasAccessibilityAccess = hasAccessibility,
                 )
@@ -79,48 +104,134 @@ class AppBlockerViewModel(
         }
     }
 
-    fun setDailyLimitMinutes(minutes: Int) {
+    fun setPaused(paused: Boolean) {
         viewModelScope.launch {
-            val current = ruleRepository.getRule(BRIDGED_PACKAGE)
-            ruleRepository.upsertRule(
-                BlockingRule(
-                    packageName = BRIDGED_PACKAGE,
-                    dailyLimitMinutes = minutes.coerceAtLeast(0),
-                    enabled = current?.enabled ?: false,
-                ),
-            )
+            ruleRepository.setPaused(paused)
             refresh()
         }
     }
 
-    fun setBlockingEnabled(enabled: Boolean) {
+    fun setRuleEnabled(packageName: String, enabled: Boolean) {
         viewModelScope.launch {
-            // Guard: only allow enabling when prerequisites are met (spec §12).
-            if (enabled && !_uiState.value.canEnableBlocking) {
+            // Only allow enabling when prerequisites are met (spec §12).
+            if (enabled && !_uiState.value.hasAllPermissions) {
                 refresh()
                 return@launch
             }
-            val current = ruleRepository.getRule(BRIDGED_PACKAGE)
-            ruleRepository.upsertRule(
-                BlockingRule(
-                    packageName = BRIDGED_PACKAGE,
-                    dailyLimitMinutes = current?.dailyLimitMinutes
-                        ?: _uiState.value.dailyLimitMinutes,
-                    enabled = enabled,
-                ),
-            )
+            ruleRepository.setEnabled(packageName, enabled)
             refresh()
         }
     }
+
+    // --- Editor (add / edit) ---------------------------------------------
+
+    fun beginEditRule(row: RuleRow) {
+        _uiState.update {
+            it.copy(
+                editor = EditorState(
+                    packageName = row.packageName,
+                    label = row.label,
+                    icon = row.icon,
+                    limitMinutes = row.limitMinutes,
+                    enabled = row.enabled,
+                    isNew = false,
+                ),
+            )
+        }
+    }
+
+    fun beginAddRule(app: InstalledApp) {
+        appInfoCache[app.packageName] = app
+        _uiState.update {
+            it.copy(
+                editor = EditorState(
+                    packageName = app.packageName,
+                    label = app.label,
+                    icon = app.icon,
+                    limitMinutes = AppBlockerConfig.DEFAULT_DAILY_LIMIT_MINUTES,
+                    enabled = true,
+                    isNew = true,
+                ),
+            )
+        }
+    }
+
+    fun updateEditorLimit(minutes: Int) {
+        _uiState.update { it.copy(editor = it.editor?.copy(limitMinutes = minutes.coerceAtLeast(0))) }
+    }
+
+    fun updateEditorEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(editor = it.editor?.copy(enabled = enabled)) }
+    }
+
+    fun saveEditor() {
+        val editor = _uiState.value.editor ?: return
+        viewModelScope.launch {
+            ruleRepository.upsertRule(
+                BlockingRule(
+                    packageName = editor.packageName,
+                    dailyLimitMinutes = editor.limitMinutes,
+                    enabled = editor.enabled,
+                ),
+            )
+            _uiState.update { it.copy(editor = null) }
+            refresh()
+        }
+    }
+
+    fun deleteEditingRule() {
+        val editor = _uiState.value.editor ?: return
+        viewModelScope.launch {
+            ruleRepository.deleteRule(editor.packageName)
+            _uiState.update { it.copy(editor = null) }
+            refresh()
+        }
+    }
+
+    fun dismissEditor() {
+        _uiState.update { it.copy(editor = null) }
+    }
+
+    // --- App picker -------------------------------------------------------
+
+    fun loadPicker() {
+        _pickerState.update { it.copy(isLoading = true, query = "") }
+        viewModelScope.launch {
+            val existing = ruleRepository.getRules().map { it.packageName }.toSet()
+            val apps = installedAppProvider.getLaunchableApps()
+                .filterNot { it.packageName in existing }
+            apps.forEach { appInfoCache.putIfAbsent(it.packageName, it) }
+            allPickerApps = apps
+            _pickerState.value = PickerState(isLoading = false, apps = apps, query = "")
+        }
+    }
+
+    fun setPickerQuery(query: String) {
+        _pickerState.update { it.copy(query = query, apps = filterApps(allPickerApps, query)) }
+    }
+
+    // --- Settings ---------------------------------------------------------
 
     fun openUsageAccessSettings() = settingsNavigator.openUsageAccessSettings()
 
     fun openAccessibilitySettings() = settingsNavigator.openAccessibilitySettings()
 
-    companion object {
-        // The single-app bridge operates on the Instagram rule until step 4.
-        private const val BRIDGED_PACKAGE = AppBlockerConfig.INSTAGRAM_PACKAGE
+    // --- Internals --------------------------------------------------------
 
+    private suspend fun appInfo(packageName: String): InstalledApp? {
+        appInfoCache[packageName]?.let { return it }
+        return installedAppProvider.getInstalledApp(packageName)?.also {
+            appInfoCache[packageName] = it
+        }
+    }
+
+    private fun filterApps(apps: List<InstalledApp>, query: String): List<InstalledApp> {
+        val q = query.trim()
+        if (q.isEmpty()) return apps
+        return apps.filter { it.label.contains(q, ignoreCase = true) }
+    }
+
+    companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]
@@ -132,6 +243,7 @@ class AppBlockerViewModel(
                     usageAccessChecker = container.usageAccessChecker,
                     accessibilityChecker = container.accessibilityChecker,
                     settingsNavigator = container.settingsNavigator,
+                    installedAppProvider = container.installedAppProvider,
                 )
             }
         }
