@@ -1,0 +1,65 @@
+package com.example.appblocker
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import com.example.appblocker.ui.AppBlockerScreen
+import com.example.appblocker.ui.AppBlockerViewModel
+import com.example.appblocker.ui.theme.AppBlockerTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+class MainActivity : ComponentActivity() {
+
+    private val viewModel: AppBlockerViewModel by viewModels {
+        AppBlockerViewModel.Factory
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        setContent {
+            AppBlockerTheme {
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    AppBlockerScreen(
+                        state = state,
+                        onLimitChange = viewModel::setDailyLimitMinutes,
+                        onBlockingToggle = viewModel::setBlockingEnabled,
+                        onGrantUsageAccess = viewModel::openUsageAccessSettings,
+                        onEnableAccessibility = viewModel::openAccessibilitySettings,
+                        modifier = Modifier.padding(innerPadding),
+                    )
+                }
+            }
+        }
+
+        // Refresh on every foreground entry (covers returning from Settings) and
+        // then lightly poll while visible — no need for per-second updates
+        // (spec §10.3).
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    viewModel.refresh()
+                    delay(REFRESH_INTERVAL_MILLIS)
+                }
+            }
+        }
+    }
+
+    private companion object {
+        const val REFRESH_INTERVAL_MILLIS = 30_000L
+    }
+}
