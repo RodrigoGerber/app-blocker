@@ -1,6 +1,8 @@
 # Plan — Multi-app blocking
 
-Status: **proposal for review** (no code written yet).
+Status: **implemented** (all 6 steps landed; 36 unit tests passing). On-device
+verification pending. The optional single-query usage optimisation was skipped
+as unnecessary for a handful of apps.
 
 ## Goal
 
@@ -187,13 +189,14 @@ suspend fun setPaused(paused: Boolean)
 The accessibility service's monitored-set collector yields an **empty set**
 while `paused == true`, so the hot path stays a single set lookup.
 
-## Suggested implementation order
+## Implementation order (all done)
 
-1. Data layer: list-based `RuleRepository` + serialization + migration + tests.
-2. Blocking: per-package policy + service monitored-set + per-package debounce.
-3. `InstalledAppProvider.getLaunchableApps()` + icon loading.
-4. Navigation + rules-list screen + ViewModel rework.
-5. App picker + rule editor.
-6. Polish: empty states, delete UX, optional single-query usage.
+1. [x] Data layer: list-based `RuleRepository` + serialization + migration + tests.
+2. [x] Blocking: per-package policy + service monitored-set + per-package debounce.
+3. [x] `InstalledAppProvider.getLaunchableApps()` + icon loading.
+4. [x] Navigation + rules-list screen + ViewModel rework.
+5. [x] App picker + rule editor (delivered with step 4).
+6. [x] Polish: picker empty state, delete confirmation, dead-code cleanup.
+   Single-query usage optimisation intentionally skipped.
 
-Each step builds and keeps tests green before the next.
+Each step built and kept tests green before the next.
