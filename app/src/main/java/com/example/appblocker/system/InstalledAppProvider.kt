@@ -3,6 +3,8 @@ package com.example.appblocker.system
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.drawable.Drawable
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.CoroutineDispatcher
@@ -41,9 +43,7 @@ class InstalledAppProvider(
             try {
                 val info = pm.getApplicationInfo(packageName, 0)
                 val label = pm.getApplicationLabel(info).toString()
-                val icon = runCatching {
-                    pm.getApplicationIcon(info).toBitmap(ICON_PX, ICON_PX).asImageBitmap()
-                }.getOrNull()
+                val icon = pm.getApplicationIcon(info).toIconBitmap()
                 InstalledApp(packageName = packageName, label = label, icon = icon)
             } catch (e: PackageManager.NameNotFoundException) {
                 null
@@ -74,9 +74,7 @@ class InstalledAppProvider(
                 val pkg = resolveInfo.activityInfo.packageName
                 val label = runCatching { resolveInfo.loadLabel(pm).toString() }
                     .getOrDefault(pkg)
-                val icon = runCatching {
-                    resolveInfo.loadIcon(pm).toBitmap(ICON_PX, ICON_PX).asImageBitmap()
-                }.getOrNull()
+                val icon = resolveInfo.loadIcon(pm).toIconBitmap()
                 InstalledApp(packageName = pkg, label = label, icon = icon)
             }
             .sortedBy { it.label.lowercase() }
@@ -90,8 +88,13 @@ class InstalledAppProvider(
         return resolved?.activityInfo?.packageName
     }
 
+    /** Rasterize an app icon to a fixed-size [ImageBitmap], or null on failure. */
+    private fun Drawable.toIconBitmap(): ImageBitmap? =
+        runCatching { toBitmap(ICON_PX, ICON_PX).asImageBitmap() }.getOrNull()
+
     private companion object {
         // 48dp at ~xxhdpi; large enough for the picker rows without being huge.
         const val ICON_PX = 144
     }
 }
+

@@ -19,15 +19,13 @@ import androidx.compose.ui.unit.dp
 import com.example.appblocker.ui.theme.AppBlockerTheme
 
 /**
- * One row describing the state of a required permission. When [granted] is
- * false, an action button is shown to open the relevant Settings screen
- * (spec §12, §15).
+ * A warning card for a missing required permission, with an action that opens
+ * the relevant Settings screen (spec §12, §15). Only shown while the permission
+ * is absent, so there is no "granted" state.
  */
 @Composable
 fun PermissionCard(
-    label: String,
-    granted: Boolean,
-    missingMessage: String,
+    message: String,
     actionLabel: String,
     onActionClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -35,11 +33,7 @@ fun PermissionCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (granted) {
-                MaterialTheme.colorScheme.surfaceVariant
-            } else {
-                MaterialTheme.colorScheme.errorContainer
-            },
+            containerColor = MaterialTheme.colorScheme.errorContainer,
         ),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -48,21 +42,19 @@ fun PermissionCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(text = if (granted) "✓" else "!")
+                Text(text = "!")
                 Text(
-                    text = if (granted) label else missingMessage,
+                    text = message,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                 )
             }
 
-            if (!granted) {
-                OutlinedButton(
-                    onClick = onActionClick,
-                    modifier = Modifier.padding(top = 8.dp),
-                ) {
-                    Text(text = actionLabel)
-                }
+            OutlinedButton(
+                onClick = onActionClick,
+                modifier = Modifier.padding(top = 8.dp),
+            ) {
+                Text(text = actionLabel)
             }
         }
     }
@@ -72,22 +64,10 @@ fun PermissionCard(
 @Composable
 private fun PermissionCardPreview() {
     AppBlockerTheme {
-        Column {
-            PermissionCard(
-                label = "Usage access",
-                granted = true,
-                missingMessage = "Usage access required",
-                actionLabel = "Grant access",
-                onActionClick = {},
-            )
-            PermissionCard(
-                label = "Accessibility service",
-                granted = false,
-                missingMessage = "Accessibility service disabled",
-                actionLabel = "Enable service",
-                onActionClick = {},
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
+        PermissionCard(
+            message = "Usage access required",
+            actionLabel = "Grant access",
+            onActionClick = {},
+        )
     }
 }

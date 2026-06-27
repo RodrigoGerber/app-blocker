@@ -225,12 +225,6 @@ class AppBlockerViewModel(
         }
     }
 
-    private fun filterApps(apps: List<InstalledApp>, query: String): List<InstalledApp> {
-        val q = query.trim()
-        if (q.isEmpty()) return apps
-        return apps.filter { it.label.contains(q, ignoreCase = true) }
-    }
-
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {

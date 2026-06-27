@@ -92,9 +92,7 @@ private fun RulesContent(
         if (!state.hasUsageAccess) {
             item {
                 PermissionCard(
-                    label = "Usage access",
-                    granted = false,
-                    missingMessage = "Usage access required",
+                    message = "Usage access required",
                     actionLabel = "Grant access",
                     onActionClick = onGrantUsageAccess,
                 )
@@ -103,9 +101,7 @@ private fun RulesContent(
         if (!state.hasAccessibilityAccess) {
             item {
                 PermissionCard(
-                    label = "Accessibility service",
-                    granted = false,
-                    missingMessage = "Accessibility service disabled",
+                    message = "Accessibility service disabled",
                     actionLabel = "Enable service",
                     onActionClick = onEnableAccessibility,
                 )

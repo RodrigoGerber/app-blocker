@@ -2,26 +2,6 @@
 <resources>
     <string name="app_name">App Blocker</string>
 
-    <string name="accessibility_service_description">Detects when the monitored app (Instagram) comes to the foreground so App Blocker can return you to the Home screen once your daily limit is reached. No screen content is read or stored.</string>
-
-    <!-- Screen -->
-    <string name="monitored_app_name">Instagram</string>
-    <string name="usage_today_format">%1$d of %2$d minutes used today</string>
-    <string name="remaining_format">%1$d minutes remaining</string>
-    <string name="daily_limit_label">Daily limit</string>
-    <string name="minutes_suffix">minutes</string>
-    <string name="blocking_label">Blocking</string>
-    <string name="permissions_label">Permissions</string>
-
-    <!-- Permissions -->
-    <string name="usage_access_label">Usage access</string>
-    <string name="accessibility_label">Accessibility service</string>
-    <string name="usage_access_missing">Usage access required</string>
-    <string name="accessibility_missing">Accessibility service disabled</string>
-    <string name="grant_access">Grant access</string>
-    <string name="enable_service">Enable service</string>
-
-    <!-- Actions -->
-    <string name="decrease">Decrease</string>
-    <string name="increase">Increase</string>
+    <!-- Now multi-app: the description no longer names a specific app. -->
+    <string name="accessibility_service_description">Detects when a monitored app comes to the foreground so App Blocker can return you to the Home screen once its daily limit is reached. No screen content is read or stored.</string>
 </resources>

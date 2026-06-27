@@ -1,12 +1,13 @@
 package com.example.appblocker.config
 
 /**
- * Central place for the few constants the MVP depends on. Keeping the Instagram
- * package name here avoids scattering the literal string across the codebase and
- * makes a future expansion to other apps a one-line change.
+ * Central place for the few app-wide constants and debug flags.
  */
 object AppBlockerConfig {
+    /** Seed package for migrating the old single-rule data into the rule list. */
     const val INSTAGRAM_PACKAGE = "com.instagram.android"
+
+    /** Default daily limit applied to a newly added rule. */
     const val DEFAULT_DAILY_LIMIT_MINUTES = 30
 
     /**
